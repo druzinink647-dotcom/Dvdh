@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Pulse Mod — Оформление подписки</title>
+    <title>Pulse Mod -- Оформление подписки</title>
     <style>
         * {
             margin: 0;
@@ -445,7 +445,7 @@
         <div class="header">
             <div class="badge">⚡ Официальная подписка</div>
             <h1>PULSE MOD</h1>
-            <p>Выберите доступ — навсегда или на срок</p>
+            <p>Выберите доступ -- навсегда или на срок</p>
         </div>
 
         <div class="pricing-card card-week" data-plan="week" data-price="199">
@@ -517,7 +517,7 @@
                 <li>Скопируйте карту выше</li>
                 <li>Переведите <strong id="instructionAmount">199</strong> ₽ в Тинькофф / любом банке</li>
                 <li>Нажмите «Выбрать чек» и приложите скрин оплаты</li>
-                <li>Нажмите «Отправить чек» — мы проверим и активируем доступ</li>
+                <li>Нажмите «Отправить чек» -- мы проверим и активируем доступ</li>
             </ol>
         </div>
 
@@ -643,4 +643,154 @@
         document.getElementById('paymentScreen').classList.add('active');
         
         document.getElementById('amountValue').innerHTML = price + ' ₽';
-        document.getElementById('oldPriceSpan').style.di
+        document.getElementById('oldPriceSpan').style
+        document.getElementById('discountBadge').style.display = 'none';
+        document.getElementById('instructionAmount').innerText = price;
+    }
+
+    document.querySelectorAll('.buy-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const card = btn.closest('.pricing-card');
+            const plan = card.getAttribute('data-plan');
+            const price = parseInt(card.getAttribute('data-price'));
+            showPaymentScreen(plan, price);
+        });
+    });
+
+    document.querySelectorAll('.pricing-card').forEach(card => {
+        card.addEventListener('click', (e) => {
+            if (e.target.classList.contains('buy-btn')) return;
+            const btn = card.querySelector('.buy-btn');
+            if (btn) btn.click();
+        });
+    });
+
+    document.getElementById('backBtn').addEventListener('click', () => {
+        document.getElementById('planScreen').classList.remove('hide');
+        document.getElementById('paymentScreen').classList.remove('active');
+    });
+
+    const promoInput = document.getElementById('promoInput');
+    promoInput.addEventListener('input', updatePriceWithPromo);
+    promoInput.addEventListener('blur', updatePriceWithPromo);
+
+    // Копирование номера карты (работает всегда)
+    document.getElementById('copyCardBtn').addEventListener('click', async () => {
+        const cardNumberElement = document.getElementById('cardNumber');
+        let cardNumber = cardNumberElement.innerText.replace(/\s/g, '');
+        
+        // Пробуем современный метод
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            try {
+                await navigator.clipboard.writeText(cardNumber);
+                showMessage('✅ Номер карты скопирован!');
+                return;
+            } catch (err) {
+                // fallback
+            }
+        }
+        
+        // Резервный метод для старых браузеров
+        const textarea = document.createElement('textarea');
+        textarea.value = cardNumber;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        try {
+            document.execCommand('copy');
+            showMessage('✅ Номер карты скопирован!');
+        } catch (err) {
+            showMessage('❌ Не удалось скопировать, скопируйте вручную', true);
+        }
+        document.body.removeChild(textarea);
+    });
+
+    const fileInput = document.getElementById('receiptFile');
+    const fileNameDisplay = document.getElementById('fileNameDisplay');
+
+    fileInput.addEventListener('change', (e) => {
+        if (e.target.files && e.target.files[0]) {
+            selectedFile = e.target.files[0];
+            fileNameDisplay.innerHTML = `✅ Выбран чек: ${selectedFile.name}`;
+            fileNameDisplay.style.color = '#86efac';
+        } else {
+            selectedFile = null;
+            fileNameDisplay.innerHTML = '';
+        }
+    });
+
+    async function sendReceiptToBot(file, planText, originalPrice, finalPriceValue, promo) {
+        return new Promise((resolve, reject) => {
+            if (!tg) {
+                resolve(false);
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+                const base64 = evt.target.result.split(',')[1];
+                
+                tg.sendData(JSON.stringify({
+                    action: 'paid_with_receipt',
+                    plan: currentPlan,
+                    planText: planText,
+                    originalPrice: originalPrice,
+                    finalPrice: finalPriceValue,
+                    discountApplied: currentDiscount > 0,
+                    promoCode: promo || null,
+                    fileName: file.name,
+                    fileType: file.type,
+                    fileBase64: base64,
+                    timestamp: Date.now()
+                }));
+                resolve(true);
+            };
+            reader.onerror = () => reject(false);
+            reader.readAsDataURL(file);
+        });
+    }
+
+    document.getElementById('payBtn').addEventListener('click', async () => {
+        const promo = document.getElementById('promoInput').value.trim().toUpperCase();
+        const isPromoValid = (promo === PROMO_CODE);
+        const appliedPromo = isPromoValid ? promo : null;
+        const priceToPay = isPromoValid ? finalPrice : currentPrice;
+        
+        let planText = '';
+        if (currentPlan === 'week') planText = 'Неделя (199₽)';
+        else if (currentPlan === 'month') planText = 'Месяц (499₽)';
+        else if (currentPlan === 'forever') planText = 'Навсегда (999₽)';
+        
+        if (isPromoValid) {
+            planText += ` (скидка 10% → ${priceToPay}₽)`;
+        }
+
+        if (!selectedFile) {
+            showMessage('❌ Пожалуйста, выберите чек (скриншот оплаты)', true);
+            return;
+        }
+
+        if (selectedFile.size > 10 * 1024 * 1024) {
+            showMessage('❌ Файл слишком большой (максимум 10 МБ)', true);
+            return;
+        }
+
+        showMessage('📤 Отправка чека...');
+
+        try {
+            if (tg) {
+                await sendReceiptToBot(selectedFile, planText, currentPrice, priceToPay, appliedPromo);
+                showMessage(`✅ Чек отправлен! Мы проверим оплату и активируем доступ в течение 5 минут.`);
+                tg.close();
+            } else {
+                showMessage(`✅ Демо-режим: чек "${selectedFile.name}" отправлен. Промокод: ${appliedPromo || 'не использован'}`, false);
+            }
+        } catch (err) {
+            showMessage('❌ Ошибка отправки чека, попробуйте ещё раз', true);
+        }
+    });
+</script>
+</body>
+</html>
